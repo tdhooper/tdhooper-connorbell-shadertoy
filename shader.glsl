@@ -12,6 +12,8 @@ float time;
 
 #define PI 3.14159265359
 
+const float loop = 6.;
+
 
 // --------------------------------------------------------
 // Rotation controls
@@ -61,9 +63,21 @@ mat3 cameraRotation() {
 // HG_SDF
 // --------------------------------------------------------
 
+float vmax(vec3 v) {
+    return max(max(v.x, v.y), v.z);
+}
+
+// Box: correct distance to corners
+float fBox(vec3 p, vec3 b) {
+    vec3 d = abs(p) - b;
+    return length(max(d, vec3(0))) + vmax(min(d, vec3(0)));
+}
+
 void pR(inout vec2 p, float a) {
     p = cos(a)*p + sin(a)*vec2(p.y, -p.x);
 }
+
+
 
 
 // --------------------------------------------------------
@@ -76,40 +90,61 @@ struct Model {
 
 float torusKnot(vec3 p, float ties, float clock) {
 
-    // Toroidal coordinates
+    // Cylyndrical coordinates
     float r = length(p.xy); // distance from center
     float z = p.z; // distance from the plane it lies on
     float a = atan(p.y, p.x); // angle around center
-
-    // 2D coordinates for drawing on torus
-    vec2 to = vec2(r, z);
+    vec3 cy = vec3(r, z, a);
 
     float anim = sin(clock + a * 3.);
-    float radius = 1.;
+    float radius = .3;
     float innerRadius = 5.0;
 
-
     // Shift out a bit
-    to.x -= innerRadius;
+    cy.x -= innerRadius;
 
-    // Rotate space as we move around angle
-    pR(to, ties * a);
+    // Twist space as we move around angle
+    pR(cy.xy, ties * a);
 
     // Mirror space
-    to.x = abs(to.x);
-    to.x -= radius;
+    float side = sign(cy.y);
+    cy.y = abs(cy.y);
+    cy.y -= radius;
 
-    // Shift out with animation
-    to.x += anim * .5;
+    // Interesting...
+    // cy.z += anim * .5;
 
-    // Adjust height with animation
-    to.y *= .7 + anim * .2;
+    float repeat = 6.;
 
-    return length(to) - radius;
+    // Move around radius, at different speeds
+    float speed = PI / (repeat / 2.);
+    speed *= side * .5 + .5 + loop;
+    speed /= loop;
+    cy.z += clock * speed;
+
+    // Repeat around radius
+    cy.z = mod(cy.z, PI / (repeat / 2.)) - PI / repeat;
+
+    // Adjust for warping on outer edge
+    cy.z *= r;
+
+    // Move to the edge
+    cy.y -= radius;
+
+    // Stretch
+    cy.z /= 2.5;
+
+    float blobSize = radius * 2.;
+    float part = length(cy) - blobSize;
+
+    // Alternarive shape
+    // part = fBox(cy, vec3(.2)) - .4;
+
+    return part;
 }
 
 Model modelA(vec3 p) {
-    float d = torusKnot(p, 3.5, iGlobalTime*4.);
+    float d = torusKnot(p, 6., time);
     return Model(d);
 }
 
@@ -266,6 +301,8 @@ vec3 linearToScreen(vec3 linearRGB) {
 void mainImage( out vec4 fragColor, in vec2 fragCoord )
 {
     time = iGlobalTime;
+
+    time = mod(time, loop);
 
     vec2 p = (-iResolution.xy + 2.0*fragCoord.xy)/iResolution.y;
     vec2 m = iMouse.xy / iResolution.xy;
