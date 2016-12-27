@@ -65,11 +65,28 @@ struct Model {
     float dist;
 };
 
+float torusKnot(vec3 p, float ties, float clock) {
+    
+    float r = length(p.xy);
+    float a = atan(p.y, p.x);
+    float oa = ties*a;
+    float anim = sin(clock + a * 3.);
+    
+    float radius = 1.;
+    float innerRadius = 5.0;
+    
+    p.xy = vec2(r - innerRadius, 0.);
+    p.xz = cos(oa)*p.xz + sin(oa)*vec2(-p.z, p.x);
+    p.z *= .7+anim*0.2;
+    p.x = abs(p.x) - radius + anim*0.5;
+    
+    return length(p) - radius;
+}
 
 Model modelA(vec3 p) {
-    float d = 10000.;
-    d = min(d, length(p) - .4);
-    d = max(d, -(length(p + vec3(.2)) - .3));
+    p.z -= 15.;
+    float d = torusKnot(p, 3.5, iGlobalTime*4.);
+    
     return Model(d);
 }
 
@@ -158,28 +175,29 @@ Hit raymarch(CastRay castRay){
 // --------------------------------------------------------
 
 void shadeSurface(inout Hit hit){
-
-    vec3 background = vec3(.01);
-
+    
+    vec3 background = vec3(.1);
+    
     if (hit.isBackground) {
         hit.color = background;
         return;
     }
-
+    
     vec3 light = normalize(vec3(.5,1,0));
     vec3 diffuse = vec3(dot(hit.normal, light) * .5 + .5);
+    diffuse = sin(diffuse*vec3(.1,.75,.75));
     hit.color = diffuse;
 }
 
 
 vec3 render(Hit hit){
-
-    #ifdef DEBUG
-        return hit.normal * .5 + .5;
-    #endif
-
+    
+#ifdef DEBUG
+    return hit.normal * .5 + .5;
+#endif
+    
     shadeSurface(hit);
-
+    
     return hit.color;
 }
 
@@ -212,7 +230,7 @@ void doCamera(out vec3 camPos, out vec3 camTar, out float camRoll, in vec2 mouse
 // https://www.shadertoy.com/view/Xds3zN
 // --------------------------------------------------------
 
-const float GAMMA = 2.2;
+const float GAMMA = 1.;
 
 vec3 gamma(vec3 color, float g) {
     return pow(color, vec3(g));
