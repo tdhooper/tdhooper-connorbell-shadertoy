@@ -66,27 +66,25 @@ struct Model {
 };
 
 float torusKnot(vec3 p, float ties, float clock) {
-    
+
     float r = length(p.xy);
     float a = atan(p.y, p.x);
     float oa = ties*a;
     float anim = sin(clock + a * 3.);
-    
+
     float radius = 1.;
     float innerRadius = 5.0;
-    
+
     p.xy = vec2(r - innerRadius, 0.);
     p.xz = cos(oa)*p.xz + sin(oa)*vec2(-p.z, p.x);
     p.z *= .7+anim*0.2;
     p.x = abs(p.x) - radius + anim*0.5;
-    
+
     return length(p) - radius;
 }
 
 Model modelA(vec3 p) {
-    p.z -= 15.;
     float d = torusKnot(p, 3.5, iGlobalTime*4.);
-    
     return Model(d);
 }
 
@@ -175,14 +173,14 @@ Hit raymarch(CastRay castRay){
 // --------------------------------------------------------
 
 void shadeSurface(inout Hit hit){
-    
+
     vec3 background = vec3(.1);
-    
+
     if (hit.isBackground) {
         hit.color = background;
         return;
     }
-    
+
     vec3 light = normalize(vec3(.5,1,0));
     vec3 diffuse = vec3(dot(hit.normal, light) * .5 + .5);
     diffuse = sin(diffuse*vec3(.1,.75,.75));
@@ -191,13 +189,13 @@ void shadeSurface(inout Hit hit){
 
 
 vec3 render(Hit hit){
-    
+
 #ifdef DEBUG
     return hit.normal * .5 + .5;
 #endif
-    
+
     shadeSurface(hit);
-    
+
     return hit.color;
 }
 
@@ -216,7 +214,7 @@ mat3 calcLookAtMatrix( in vec3 ro, in vec3 ta, in float roll )
 }
 
 void doCamera(out vec3 camPos, out vec3 camTar, out float camRoll, in vec2 mouse) {
-    float dist = 1.5;
+    float dist = 18.;
     camRoll = 0.;
     camTar = vec3(0,0,0);
     camPos = vec3(0,0,-dist);
