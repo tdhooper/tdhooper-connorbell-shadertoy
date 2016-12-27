@@ -58,6 +58,15 @@ mat3 cameraRotation() {
 
 
 // --------------------------------------------------------
+// HG_SDF
+// --------------------------------------------------------
+
+void pR(inout vec2 p, float a) {
+    p = cos(a)*p + sin(a)*vec2(p.y, -p.x);
+}
+
+
+// --------------------------------------------------------
 // Modelling
 // --------------------------------------------------------
 
@@ -67,20 +76,36 @@ struct Model {
 
 float torusKnot(vec3 p, float ties, float clock) {
 
-    float r = length(p.xy);
-    float a = atan(p.y, p.x);
-    float oa = ties*a;
-    float anim = sin(clock + a * 3.);
+    // Toroidal coordinates
+    float r = length(p.xy); // distance from center
+    float z = p.z; // distance from the plane it lies on
+    float a = atan(p.y, p.x); // angle around center
 
+    // 2D coordinates for drawing on torus
+    vec2 to = vec2(r, z);
+
+    float anim = sin(clock + a * 3.);
     float radius = 1.;
     float innerRadius = 5.0;
 
-    p.xy = vec2(r - innerRadius, 0.);
-    p.xz = cos(oa)*p.xz + sin(oa)*vec2(-p.z, p.x);
-    p.z *= .7+anim*0.2;
-    p.x = abs(p.x) - radius + anim*0.5;
 
-    return length(p) - radius;
+    // Shift out a bit
+    to.x -= innerRadius;
+
+    // Rotate space as we move around angle
+    pR(to, ties * a);
+
+    // Mirror space
+    to.x = abs(to.x);
+    to.x -= radius;
+
+    // Shift out with animation
+    to.x += anim * .5;
+
+    // Adjust height with animation
+    to.y *= .7 + anim * .2;
+
+    return length(to) - radius;
 }
 
 Model modelA(vec3 p) {
