@@ -65,6 +65,43 @@ void pR(inout vec2 p, float a) {
     p = cos(a)*p + sin(a)*vec2(p.y, -p.x);
 }
 
+// Reflect space at a plane
+float pReflect(inout vec3 p, vec3 planeNormal, float offset) {
+    float t = dot(p, planeNormal)+offset;
+    if (t < 0.) {
+        p = p - (2.*t)*planeNormal;
+    }
+    return sign(t);
+}
+
+// --------------------------------------------------------
+// knighty
+// https://www.shadertoy.com/view/MsKGzw
+// --------------------------------------------------------
+
+int Type=5;
+vec3 nc;
+vec3 pbc;
+vec3 pca;
+void initIcosahedron() {//setup folding planes and vertex
+    float cospin=cos(PI/float(Type)), scospin=sqrt(0.75-cospin*cospin);
+    nc=vec3(-0.5,-cospin,scospin);//3rd folding plane. The two others are xz and yz planes
+    pbc=vec3(scospin,0.,0.5);//No normalization in order to have 'barycentric' coordinates work evenly
+    pca=vec3(0.,scospin,cospin);
+    pbc=normalize(pbc); pca=normalize(pca);//for slightly better DE. In reality it's not necesary to apply normalization :)
+
+}
+
+void pModIcosahedron(inout vec3 p) {
+    p = abs(p);
+    pReflect(p, nc, 0.);
+    p.xy = abs(p.xy);
+    pReflect(p, nc, 0.);
+    p.xy = abs(p.xy);
+    pReflect(p, nc, 0.);
+}
+
+
 
 // --------------------------------------------------------
 // Modelling
@@ -72,9 +109,10 @@ void pR(inout vec2 p, float a) {
 
 struct Model {
     float dist;
+    float index;
 };
 
-float torusKnot(vec3 p, float ties, float clock) {
+Model torusKnot(vec3 p, float ties, float clock) {
 
     // Toroidal coordinates
     float r = length(p.xy); // distance from center
@@ -85,8 +123,8 @@ float torusKnot(vec3 p, float ties, float clock) {
     vec2 to = vec2(r, z);
 
     float anim = sin(clock + a * 3.);
-    float radius = 1.;
-    float innerRadius = 5.0;
+    float radius = .25;
+    float innerRadius = .9;
 
 
     // Shift out a bit
@@ -96,21 +134,30 @@ float torusKnot(vec3 p, float ties, float clock) {
     pR(to, ties * a);
 
     // Mirror space
+    float side = sign(to.x);
     to.x = abs(to.x);
-    to.x -= radius;
+    to.x -= radius * .9;
 
     // Shift out with animation
-    to.x += anim * .5;
+    to.x += anim * .1;
 
     // Adjust height with animation
     to.y *= .7 + anim * .2;
 
-    return length(to) - radius;
+    float d = length(to) - radius;
+    float index = max(side, 0.);
+    return Model(d, index);
 }
 
 Model modelA(vec3 p) {
-    float d = torusKnot(p, 3.5, iGlobalTime*4.);
-    return Model(d);
+
+    pModIcosahedron(p);
+    p -= pbc * 2.;
+
+    pR(p.xz, PI);
+    pR(p.yz, -time);
+
+    return torusKnot(p, 3.5, time*4.);
 }
 
 
@@ -208,7 +255,16 @@ void shadeSurface(inout Hit hit){
 
     vec3 light = normalize(vec3(.5,1,0));
     vec3 diffuse = vec3(dot(hit.normal, light) * .5 + .5);
-    diffuse = sin(diffuse*vec3(.1,.75,.75));
+
+    vec3 color;
+
+    if (hit.model.index == 1.) {
+        color = vec3(.1,.75,.75);
+    } else {
+        color = vec3(.75,.1,.75);
+    }
+
+    diffuse = sin(diffuse * color);
     hit.color = diffuse;
 }
 
@@ -239,7 +295,7 @@ mat3 calcLookAtMatrix( in vec3 ro, in vec3 ta, in float roll )
 }
 
 void doCamera(out vec3 camPos, out vec3 camTar, out float camRoll, in vec2 mouse) {
-    float dist = 18.;
+    float dist = 8.;
     camRoll = 0.;
     camTar = vec3(0,0,0);
     camPos = vec3(0,0,-dist);
@@ -266,6 +322,8 @@ vec3 linearToScreen(vec3 linearRGB) {
 void mainImage( out vec4 fragColor, in vec2 fragCoord )
 {
     time = iGlobalTime;
+
+    initIcosahedron();
 
     vec2 p = (-iResolution.xy + 2.0*fragCoord.xy)/iResolution.y;
     vec2 m = iMouse.xy / iResolution.xy;
