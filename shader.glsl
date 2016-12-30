@@ -11,6 +11,7 @@
 float time;
 
 #define PI 3.14159265359
+#define TAU 6.283185307179586
 
 
 // --------------------------------------------------------
@@ -117,15 +118,21 @@ Model torusKnot(vec3 p, float ties, float clock) {
     // Toroidal coordinates
     float r = length(p.xy); // distance from center
     float z = p.z; // distance from the plane it lies on
-    float a = atan(p.y, p.x) + clock/3.14159; // angle around center
+    float a = atan(p.y, p.x);
     
     // 2D coordinates for drawing on torus
     vec2 to = vec2(r, z);
     
-    float anim = sin(clock + a * 5.);
-    float radius = .15 + anim*0.05;
-    float innerRadius = 1. + anim*0.05;
+    // Rotate around axis
+    a += clock * TAU / ties;
+
+    float bumps = ties * 3.;
+    float anim = sin(clock * TAU + a * bumps);
+    float radius = .15;
+    float innerRadius = 1.;
     
+    radius += anim * .05;
+    innerRadius += anim * .05;
     
     // Shift out a bit
     to.x -= innerRadius;
@@ -155,15 +162,15 @@ Model modelA(vec3 p) {
     p -= pbc * 2.;
     
     pR(p.xz, PI+0.5);
-    pR(p.yz, PI * 0.6 + sin(time)*0.1);
+    pR(p.yz, PI * 0.6 + sin(time * TAU)*0.1);
     
     return torusKnot(p, 1.5, time);
 }
 
 
 Model map( vec3 p ){
-    pR(p.xz,sin(time)*0.1);
-    pR(p.yz,cos(time)*0.1);
+    pR(p.xz,sin(time*TAU)*0.1);
+    pR(p.yz,cos(time*TAU)*0.1);
     mat3 m = modelRotation();
     p *= m;
     Model model = modelA(p);
@@ -323,7 +330,11 @@ vec3 linearToScreen(vec3 linearRGB) {
 
 void mainImage( out vec4 fragColor, in vec2 fragCoord )
 {
-    time = iGlobalTime*2.;
+    time = iGlobalTime;
+    
+    time /= 4.;
+    
+    time = mod(time, 1.);
 
     initIcosahedron();
 
