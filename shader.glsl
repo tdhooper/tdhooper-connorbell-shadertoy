@@ -113,55 +113,57 @@ struct Model {
 };
 
 Model torusKnot(vec3 p, float ties, float clock) {
-
+    
     // Toroidal coordinates
     float r = length(p.xy); // distance from center
     float z = p.z; // distance from the plane it lies on
-    float a = atan(p.y, p.x); // angle around center
-
+    float a = atan(p.y, p.x) + clock/3.14159; // angle around center
+    
     // 2D coordinates for drawing on torus
     vec2 to = vec2(r, z);
-
-    float anim = sin(clock + a * 3.);
-    float radius = .25;
-    float innerRadius = .9;
-
-
+    
+    float anim = sin(clock + a * 5.);
+    float radius = .15 + anim*0.05;
+    float innerRadius = 1. + anim*0.05;
+    
+    
     // Shift out a bit
     to.x -= innerRadius;
-
+    
     // Rotate space as we move around angle
     pR(to, ties * a);
-
+    
     // Mirror space
     float side = sign(to.x);
     to.x = abs(to.x);
-    to.x -= radius * .9;
-
+    to.x -= radius * 1.3;
+    
     // Shift out with animation
-    to.x += anim * .1;
-
+    to.x -= anim * .1;
+    
     // Adjust height with animation
-    to.y *= .7 + anim * .2;
-
+    to.y *= .7 + anim * .1;
+    
     float d = length(to) - radius;
     float index = max(side, 0.);
     return Model(d, index);
 }
 
 Model modelA(vec3 p) {
-
+    
     pModIcosahedron(p);
     p -= pbc * 2.;
-
-    pR(p.xz, PI);
-    pR(p.yz, -time);
-
-    return torusKnot(p, 3.5, time*4.);
+    
+    pR(p.xz, PI+0.5);
+    pR(p.yz, PI * 0.6 + sin(time)*0.1);
+    
+    return torusKnot(p, 1.5, time);
 }
 
 
 Model map( vec3 p ){
+    pR(p.xz,sin(time)*0.1);
+    pR(p.yz,cos(time)*0.1);
     mat3 m = modelRotation();
     p *= m;
     Model model = modelA(p);
@@ -245,38 +247,38 @@ Hit raymarch(CastRay castRay){
 // --------------------------------------------------------
 
 void shadeSurface(inout Hit hit){
-
+    
     vec3 background = vec3(.1);
-
+    
     if (hit.isBackground) {
         hit.color = background;
         return;
     }
-
+    
     vec3 light = normalize(vec3(.5,1,0));
     vec3 diffuse = vec3(dot(hit.normal, light) * .5 + .5);
-
+    
     vec3 color;
-
+    
     if (hit.model.index == 1.) {
-        color = vec3(.1,.75,.75);
+        color = vec3(.9,.4,.5);
     } else {
-        color = vec3(.75,.1,.75);
+        color = vec3(1.4);
     }
-
+    
     diffuse = sin(diffuse * color);
     hit.color = diffuse;
 }
 
 
 vec3 render(Hit hit){
-
+    
 #ifdef DEBUG
     return hit.normal * .5 + .5;
 #endif
-
+    
     shadeSurface(hit);
-
+    
     return hit.color;
 }
 
@@ -321,7 +323,7 @@ vec3 linearToScreen(vec3 linearRGB) {
 
 void mainImage( out vec4 fragColor, in vec2 fragCoord )
 {
-    time = iGlobalTime;
+    time = iGlobalTime*2.;
 
     initIcosahedron();
 
