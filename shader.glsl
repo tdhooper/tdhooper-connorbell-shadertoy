@@ -165,10 +165,10 @@ Model torusKnot(vec3 p, float ties, float clock) {
     
     // Rotate around axis
     a += clock * TAU / ties;
-
+    
     float bumps = ties * 3.;
     float anim = sin(clock * TAU + a * bumps);
-    float radius = .15;
+    float radius = .1;
     float innerRadius = 1.;
     
     radius += anim * .05;
@@ -305,7 +305,7 @@ Hit raymarch(CastRay castRay){
 
 void shadeSurface(inout Hit hit){
     
-    vec3 background = vec3(.1);
+    vec3 background = vec3(.2);
     
     if (hit.isBackground) {
         hit.color = background;
@@ -318,9 +318,10 @@ void shadeSurface(inout Hit hit){
     vec3 color;
     
     if (hit.model.index == 1.) {
-        color = vec3(.9,.4,.5);
+        color = vec3(.3);
+        
     } else {
-        color = vec3(1.4);
+        color = vec3(1.,.5,.35);
     }
     
     diffuse = sin(diffuse * color);
