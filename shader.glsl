@@ -4,7 +4,7 @@
 // 0: Defaults
 // 1: Model
 // 2: Camera
-#define MOUSE_CONTROL 1
+#define MOUSE_CONTROL 0
 
 //#define DEBUG
 
@@ -12,6 +12,7 @@ float time;
 
 #define PI 3.14159265359
 #define TAU 6.283185307179586
+#define PHI (1.618033988749895)
 
 
 // --------------------------------------------------------
@@ -76,6 +77,46 @@ float pReflect(inout vec3 p, vec3 planeNormal, float offset) {
 }
 
 // --------------------------------------------------------
+// https://github.com/stackgl/glsl-inverse
+// --------------------------------------------------------
+
+mat3 inverse(mat3 m) {
+  float a00 = m[0][0], a01 = m[0][1], a02 = m[0][2];
+  float a10 = m[1][0], a11 = m[1][1], a12 = m[1][2];
+  float a20 = m[2][0], a21 = m[2][1], a22 = m[2][2];
+
+  float b01 = a22 * a11 - a12 * a21;
+  float b11 = -a22 * a10 + a12 * a20;
+  float b21 = a21 * a10 - a11 * a20;
+
+  float det = a00 * b01 + a01 * b11 + a02 * b21;
+
+  return mat3(b01, (-a22 * a01 + a02 * a21), (a12 * a01 - a02 * a11),
+              b11, (a22 * a00 - a02 * a20), (-a12 * a00 + a02 * a10),
+              b21, (-a21 * a00 + a01 * a20), (a11 * a00 - a01 * a10)) / det;
+}
+
+
+// --------------------------------------------------------
+// http://math.stackexchange.com/a/897677
+// --------------------------------------------------------
+
+mat3 orientMatrix(vec3 A, vec3 B) {
+    mat3 Fi = mat3(
+        A,
+        (B - dot(A, B) * A) / length(B - dot(A, B) * A),
+        cross(B, A)
+    );
+    mat3 G = mat3(
+        dot(A, B),              -length(cross(A, B)),   0,
+        length(cross(A, B)),    dot(A, B),              0,
+        0,                      0,                      1
+    );
+    return Fi * G * inverse(Fi);
+}
+
+
+// --------------------------------------------------------
 // knighty
 // https://www.shadertoy.com/view/MsKGzw
 // --------------------------------------------------------
@@ -101,7 +142,6 @@ void pModIcosahedron(inout vec3 p) {
     p.xy = abs(p.xy);
     pReflect(p, nc, 0.);
 }
-
 
 
 // --------------------------------------------------------
@@ -143,10 +183,10 @@ Model torusKnot(vec3 p, float ties, float clock) {
     // Mirror space
     float side = sign(to.x);
     to.x = abs(to.x);
-    to.x -= radius * 1.3;
+    to.x -= radius * 1.0;
     
     // Shift out with animation
-    to.x -= anim * .1;
+    to.x -= anim * .05;
     
     // Adjust height with animation
     to.y *= .7 + anim * .1;
@@ -162,17 +202,27 @@ Model modelA(vec3 p) {
     p -= pbc * 2.;
     
     pR(p.xz, PI+0.5);
-    pR(p.yz, PI * 0.6 + sin(time * TAU)*0.1);
+    pR(p.yz, PI * .4 + sin(time * TAU) * .1);
     
     return torusKnot(p, 1.5, time);
 }
 
 
 Model map( vec3 p ){
-    pR(p.xz,sin(time*TAU)*0.1);
-    pR(p.yz,cos(time*TAU)*0.1);
     mat3 m = modelRotation();
     p *= m;
+
+    // Rock up + down
+    pR(p.yz, cos(time * TAU) * .3);
+    
+    // Spin
+    pR(p.xz, time * TAU / 5.);
+    
+    // Orient icosahedron face directly up
+    vec3 v = normalize(vec3(0, PHI, 1));
+    m = orientMatrix(vec3(0,1,0), v);
+    p *= m;
+
     Model model = modelA(p);
     return model;
 }
@@ -304,7 +354,7 @@ mat3 calcLookAtMatrix( in vec3 ro, in vec3 ta, in float roll )
 }
 
 void doCamera(out vec3 camPos, out vec3 camTar, out float camRoll, in vec2 mouse) {
-    float dist = 8.;
+    float dist = 4.;
     camRoll = 0.;
     camTar = vec3(0,0,0);
     camPos = vec3(0,0,-dist);
@@ -332,7 +382,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
 {
     time = iGlobalTime;
     
-    time /= 4.;
+    time /= 6.;
     
     time = mod(time, 1.);
 
