@@ -11,6 +11,7 @@
 float time;
 
 #define PI 3.14159265359
+#define TAU 6.28318530718
 
 
 // --------------------------------------------------------
@@ -74,8 +75,10 @@ struct Model {
     float dist;
 };
 
-float torusKnot(vec3 p, float ties, float clock) {
+float torusKnot(vec3 p, float clock) {
 
+    pR(p.xy, clock * TAU);
+    
     // Toroidal coordinates
     float r = length(p.xy); // distance from center
     float z = p.z; // distance from the plane it lies on
@@ -84,23 +87,31 @@ float torusKnot(vec3 p, float ties, float clock) {
     // 2D coordinates for drawing on torus
     vec2 to = vec2(r, z);
 
-    float anim = sin(clock + a * 3.);
-    float radius = 1.;
+    float anim = sin(TAU * clock + a * 3.);
+    float radius = .4;
     float innerRadius = 5.0;
-
-
+    
     // Shift out a bit
     to.x -= innerRadius;
-
-    // Rotate space as we move around angle
-    pR(to, ties * a);
-
+    
+    // Twist a small range 
+    float kink = sin(a / 2.) * .5 + .5;
+    kink = pow(kink, 2.);
+    pR(to, kink * TAU);
+    
+    // 6 twists
+    pR(to, a * 3.);
+    
+    pR(to, clock * 4. * TAU);
+    
     // Mirror space
     to.x = abs(to.x);
-    to.x -= radius;
 
-    // Shift out with animation
-    to.x += anim * .5;
+    // Separate two strands
+    to.x -= .4;
+    
+    // Magnify the most twisty part
+    to.x -= (sin(a + PI / 2.) * .5 + .5) * .3;
 
     // Adjust height with animation
     to.y *= .7 + anim * .2;
@@ -109,7 +120,7 @@ float torusKnot(vec3 p, float ties, float clock) {
 }
 
 Model modelA(vec3 p) {
-    float d = torusKnot(p, 3.5, iGlobalTime*4.);
+    float d = torusKnot(p, time);
     return Model(d);
 }
 
@@ -130,7 +141,7 @@ Model map( vec3 p ){
 const float MAX_TRACE_DISTANCE = 30.; // max trace distance
 const float INTERSECTION_PRECISION = .001; // precision of the intersection
 const int NUM_OF_TRACE_STEPS = 100;
-const float FUDGE_FACTOR = 1.; // Default is 1, reduce to fix overshoots
+const float FUDGE_FACTOR = .8; // Default is 1, reduce to fix overshoots
 
 struct CastRay {
     vec3 origin;
@@ -266,6 +277,8 @@ vec3 linearToScreen(vec3 linearRGB) {
 void mainImage( out vec4 fragColor, in vec2 fragCoord )
 {
     time = iGlobalTime;
+    time /= 2.;
+    time = mod(time, 1.);
 
     vec2 p = (-iResolution.xy + 2.0*fragCoord.xy)/iResolution.y;
     vec2 m = iMouse.xy / iResolution.xy;
