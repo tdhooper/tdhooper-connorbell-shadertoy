@@ -73,9 +73,10 @@ void pR(inout vec2 p, float a) {
 
 struct Model {
     float dist;
+    float id;
 };
 
-float torusKnot(vec3 p, float clock) {
+Model torusKnot(vec3 p, float clock) {
 
     pR(p.xy, clock * TAU);
     
@@ -96,7 +97,7 @@ float torusKnot(vec3 p, float clock) {
     
     // Twist a small range 
     float kink = sin(a / 2.) * .5 + .5;
-    kink = pow(kink, 2.);
+    kink = pow(kink, 5.);
     pR(to, kink * TAU);
     
     // 6 twists
@@ -105,6 +106,7 @@ float torusKnot(vec3 p, float clock) {
     pR(to, clock * 4. * TAU);
     
     // Mirror space
+    float id = max(sign(to.x), 0.);
     to.x = abs(to.x);
 
     // Separate two strands
@@ -116,12 +118,13 @@ float torusKnot(vec3 p, float clock) {
     // Adjust height with animation
     to.y *= .7 + anim * .2;
 
-    return length(to) - radius;
+    float d = length(to) - radius;
+    
+    return Model(d, id);
 }
 
 Model modelA(vec3 p) {
-    float d = torusKnot(p, time);
-    return Model(d);
+    return torusKnot(p, time);
 }
 
 
@@ -216,10 +219,18 @@ void shadeSurface(inout Hit hit){
         hit.color = background;
         return;
     }
+    
 
     vec3 light = normalize(vec3(.5,1,0));
     vec3 diffuse = vec3(dot(hit.normal, light) * .5 + .5);
-    diffuse = sin(diffuse*vec3(.1,.75,.75));
+    
+    vec3 colA = vec3(.1,.75,.75);
+    vec3 colB = vec3(.75,.75,.75);
+    
+    diffuse *= mix(colA, colB, hit.model.id);
+    diffuse = sin(diffuse);
+    
+    
     hit.color = diffuse;
 }
 
