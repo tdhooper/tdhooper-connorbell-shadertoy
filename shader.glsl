@@ -101,13 +101,22 @@ Model torusKnot(vec3 p, float clock) {
     pR(to, kink * TAU);
     
     // 6 twists
-    pR(to, a * 3.);
-    
+    pR(to, a * 3.5);
+
     pR(to, clock * 4. * TAU);
-    
+
     // Mirror space
     float id = max(sign(to.x), 0.);
     to.x = abs(to.x);
+
+    // Angle in range 0 - 1
+    float aa = mod(a + PI, TAU) / TAU;
+    
+    // Make angle follow the Möbius
+    aa = (aa + id) / 2.;
+    
+    // Use angle for colouring
+    id = aa;
 
     // Separate two strands
     to.x -= .4;
@@ -225,10 +234,13 @@ void shadeSurface(inout Hit hit){
     vec3 diffuse = vec3(dot(hit.normal, light) * .5 + .5);
     
     vec3 colA = vec3(.1,.75,.75);
-    vec3 colB = vec3(.75,.75,.75);
+    vec3 colB = vec3(.75,.1,.75);
     
-    diffuse *= mix(colA, colB, hit.model.id);
+    float blend = sin(hit.model.id * TAU * 3.) * .5 + .5;
+    
+    diffuse *= mix(colA, colB, blend);
     diffuse = sin(diffuse);
+    diffuse *= 1.3;
     
     
     hit.color = diffuse;
