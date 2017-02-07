@@ -66,6 +66,205 @@ void pR(inout vec2 p, float a) {
     p = cos(a)*p + sin(a)*vec2(p.y, -p.x);
 }
 
+float smax(float a, float b, float r) {
+    float m = max(a, b);
+    if ((-a < r) && (-b < r)) {
+        return max(m, -(r - sqrt((r+a)*(r+a) + (r+b)*(r+b))));
+    } else {
+        return m;
+    }
+}
+
+float smin(float a, float b, float r) {
+    float m = min(a, b);
+    if ((a < r) && (b < r) ) {
+        return min(m, r - sqrt((r-a)*(r-a) + (r-b)*(r-b)));
+    } else {
+     return m;
+    }
+}
+
+// Cone with correct distances to tip and base circle. Y is up, 0 is in the middle of the base.
+float fCone(vec3 p, float radius, float height) {
+    vec2 q = vec2(length(p.xz), p.y);
+    vec2 tip = q - vec2(0, height);
+    vec2 mantleDir = normalize(vec2(height, radius));
+    float mantle = dot(tip, mantleDir);
+    float d = max(mantle, -q.y);
+    float projected = dot(tip, vec2(mantleDir.y, -mantleDir.x));
+    
+    // distance to tip
+    if ((q.y > height) && (projected < 0.)) {
+        d = max(d, length(tip));
+    }
+    
+    // distance to base ring
+    if ((q.x > radius) && (projected > length(vec2(height, radius)))) {
+        d = max(d, length(q - vec2(radius, 0)));
+    }
+    return d;
+}
+
+float fCone(vec3 p, float radius, float height, vec3 direction, float offset) {
+    p -= direction * offset;
+    p = reflect(p, normalize(mix(vec3(0,1,0), -direction, .5)));
+    //p -= vec3(0,height,0);
+    return fCone(p, radius, height);
+}
+
+// --------------------------------------------------------
+// Icosahedral domain mirroring
+// knighty https://www.shadertoy.com/view/MsKGzw
+// 
+// Also get the face normal, and tangent planes used to
+// calculate the uv coordinates later.
+// --------------------------------------------------------
+
+#define PI 3.14159265359
+
+vec3 facePlane;
+vec3 uPlane;
+vec3 vPlane;
+
+int Type=5;
+vec3 nc;
+vec3 pab;
+vec3 pbc;
+vec3 pca;
+
+void init() {
+    float cospin=cos(PI/float(Type)), scospin=sqrt(0.75-cospin*cospin);
+    nc=vec3(-0.5,-cospin,scospin);
+    pbc=vec3(scospin,0.,0.5);
+    pca=vec3(0.,scospin,cospin);
+    pbc=normalize(pbc); pca=normalize(pca);
+    pab=vec3(0,0,1);
+    
+    facePlane = pca;
+    uPlane = cross(vec3(1,0,0), facePlane);
+    vPlane = vec3(1,0,0);
+}
+
+void fold(inout vec3 p) {
+    for(int i=0;i<5 /*Type*/;i++){
+        p.xy = abs(p.xy);
+        p -= 2. * min(0., dot(p,nc)) * nc;
+    }
+}
+
+
+// --------------------------------------------------------
+// Triangle tiling
+// Adapted from mattz https://www.shadertoy.com/view/4d2GzV
+// --------------------------------------------------------
+
+const float sqrt3 = 1.7320508075688772;
+const float i3 = 0.5773502691896258;
+
+const mat2 cart2hex = mat2(1, 0, i3, 2. * i3);
+const mat2 hex2cart = mat2(1, 0, -.5, .5 * sqrt3);
+
+#define PHI (1.618033988749895)
+
+struct TriPoints {
+    vec2 a;
+    vec2 b;
+    vec2 c;
+    vec2 center;
+    vec2 ab;
+    vec2 bc;
+    vec2 ca;
+};
+
+TriPoints closestTriPoints(vec2 p) {    
+    vec2 pTri = cart2hex * p;
+    vec2 pi = floor(pTri);
+    vec2 pf = fract(pTri);
+    
+    float split1 = step(pf.y, pf.x);
+    float split2 = step(pf.x, pf.y);
+    
+    vec2 a = vec2(split1, 1);
+    vec2 b = vec2(1, split2);
+    vec2 c = vec2(0, 0);
+
+    a += pi;
+    b += pi;
+    c += pi;
+
+    a = hex2cart * a;
+    b = hex2cart * b;
+    c = hex2cart * c;
+    
+    vec2 center = (a + b + c) / 3.;
+    
+    vec2 ab = (a + b) / 2.;
+    vec2 bc = (b + c) / 2.;
+    vec2 ca = (c + a) / 2.;
+
+    return TriPoints(a, b, c, center, ab, bc, ca);
+}
+
+
+// --------------------------------------------------------
+// Geodesic tiling
+// --------------------------------------------------------
+
+struct TriPoints3D {
+    vec3 a;
+    vec3 b;
+    vec3 c;
+    vec3 center;
+    vec3 ab;
+    vec3 bc;
+    vec3 ca;
+};
+
+vec3 intersection(vec3 n, vec3 planeNormal, float planeOffset) {
+    float denominator = dot(planeNormal, n);
+    float t = (dot(vec3(0), planeNormal ) + planeOffset) / -denominator;
+    return n * t;
+}
+
+//// Edge length of an icosahedron with an inscribed sphere of radius of 1
+//float edgeLength = 1. / ((sqrt(3.) / 12.) * (3. + sqrt(5.)));
+//// Inner radius of the icosahedron's face
+//float faceRadius = (1./6.) * sqrt(3.) * edgeLength;
+float faceRadius = 0.3819660112501051;
+
+// 2D coordinates on the icosahedron face
+vec2 icosahedronFaceCoordinates(vec3 p) {
+    vec3 pn = normalize(p);
+    vec3 i = intersection(pn, facePlane, -1.);
+    return vec2(dot(i, uPlane), dot(i, vPlane));
+}
+
+// Project 2D icosahedron face coordinates onto a sphere
+vec3 faceToSphere(vec2 facePoint) {
+    return normalize(facePlane + (uPlane * facePoint.x) + (vPlane * facePoint.y));
+}
+
+TriPoints3D geodesicTriPoints(vec3 p, float subdivisions) {
+    // Get 2D cartesian coordiantes on that face
+    vec2 uv = icosahedronFaceCoordinates(p);
+    
+    // Get points on the nearest triangle tile
+    float uvScale = subdivisions / faceRadius / 2.;
+    TriPoints points = closestTriPoints(uv * uvScale);
+    
+    // Project 2D triangle coordinates onto a sphere 
+    vec3 a = faceToSphere(points.a / uvScale);
+    vec3 b = faceToSphere(points.b / uvScale);
+    vec3 c = faceToSphere(points.c / uvScale);
+    vec3 center = faceToSphere(points.center / uvScale);
+    vec3 ab = faceToSphere(points.ab / uvScale);
+    vec3 bc = faceToSphere(points.bc / uvScale);
+    vec3 ca = faceToSphere(points.ca / uvScale);
+    
+    return TriPoints3D(a, b, c, center, ab, bc, ca);
+}
+
+
 
 // --------------------------------------------------------
 // Modelling
@@ -75,65 +274,82 @@ struct Model {
     float dist;
     float id;
 };
-
-Model torusKnot(vec3 p, float clock) {
-
-    pR(p.xy, clock * TAU);
     
-    // Toroidal coordinates
-    float r = length(p.xy); // distance from center
-    float z = p.z; // distance from the plane it lies on
-    float a = atan(p.y, p.x); // angle around center
-
-    // 2D coordinates for drawing on torus
-    vec2 to = vec2(r, z);
-
-    float anim = sin(TAU * clock + a * 3.);
-    float radius = .4;
-    float innerRadius = 5.0;
-    
-    // Shift out a bit
-    to.x -= innerRadius;
-    
-    // Twist a small range 
-    float kink = sin(a / 2.) * .5 + .5;
-    kink = pow(kink, 5.);
-    pR(to, kink * TAU);
-    
-    // 6 twists
-    pR(to, a * 3.5);
-
-    pR(to, clock * 4. * TAU);
-
-    // Mirror space
-    float id = max(sign(to.x), 0.);
-    to.x = abs(to.x);
-
-    // Angle in range 0 - 1
-    float aa = mod(a + PI, TAU) / TAU;
-    
-    // Make angle follow the Möbius
-    aa = (aa + id) / 2.;
-    
-    // Use angle for colouring
-    id = aa;
-
-    // Separate two strands
-    to.x -= .4;
-    
-    // Magnify the most twisty part
-    to.x -= (sin(a + PI / 2.) * .5 + .5) * .3;
-
-    // Adjust height with animation
-    to.y *= .7 + anim * .2;
-
-    float d = length(to) - radius;
-    
-    return Model(d, id);
+// checks to see which intersection is closer
+Model opU( Model m1, Model m2 ){
+    if (m1.dist < m2.dist) {
+        return m1;
+    } else {
+        return m2;
+    }
 }
 
+
+Model hexModel(
+    vec3 p,
+    vec3 hexCenter,
+    vec3 edgeA,
+    vec3 edgeB,
+    float s
+) {
+    float d;
+    
+    float gap = .02 / s;
+    float roundCorner = .06 / s;
+    float roundTop = .04 / s;
+    float height = 1.;
+    
+    float outerDist = length(p) - height;
+    d = outerDist;
+    
+    float blend = dot(hexCenter, facePlane);
+    blend = sin(blend * 25.) * .5 + .5;
+    float spikeHeight = mix(.1, .8, blend);
+    float spikeWidth = mix(.05, .1, blend) / s;
+    
+    float spike = fCone(p, spikeWidth, spikeHeight, hexCenter, 1.) - .01;
+    d = smin(d, spike, .1);
+
+    float edgeADist = dot(p, edgeA) + gap;
+    float edgeBDist = dot(p, edgeB) - gap;
+    float edgeDist = smax(edgeADist, -edgeBDist, roundCorner);
+    
+    d = smax(d, edgeDist, roundTop);
+    
+    return Model(d, 0.);
+}
+
+
 Model modelA(vec3 p) {
-    return torusKnot(p, time);
+    float d;
+
+    float subdivisions = 1.;
+    subdivisions = mix(1., 2., max(sign(p.z), 0.));
+    
+    fold(p);
+
+    TriPoints3D points = geodesicTriPoints(p, subdivisions);
+        
+    vec3 edgeAB = normalize(cross(points.center, points.ab));
+    vec3 edgeBC = normalize(cross(points.center, points.bc));
+    vec3 edgeCA = normalize(cross(points.center, points.ca));
+    
+    Model model, part;
+
+    part = hexModel(p, points.b, edgeAB, edgeBC, subdivisions);
+    model = part;
+
+    part = hexModel(p, points.c, edgeBC, edgeCA, subdivisions);
+    model = opU(model, part);
+    
+    part = hexModel(p, points.a, edgeCA, edgeAB, subdivisions);
+    model = opU(model, part);
+    
+    float inner = length(p) - .94;
+    model.dist = smin(model.dist, inner, .1);
+    
+    return model;
+
 }
 
 
@@ -273,7 +489,7 @@ mat3 calcLookAtMatrix( in vec3 ro, in vec3 ta, in float roll )
 }
 
 void doCamera(out vec3 camPos, out vec3 camTar, out float camRoll, in vec2 mouse) {
-    float dist = 18.;
+    float dist = 4.;
     camRoll = 0.;
     camTar = vec3(0,0,0);
     camPos = vec3(0,0,-dist);
@@ -299,6 +515,8 @@ vec3 linearToScreen(vec3 linearRGB) {
 
 void mainImage( out vec4 fragColor, in vec2 fragCoord )
 {
+    init();
+    
     time = iGlobalTime;
     time /= 2.;
     time = mod(time, 1.);
